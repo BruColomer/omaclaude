@@ -1,5 +1,7 @@
 # omaclaude
 
+![omaclaude: Claude desktop, in your Omarchy theme](preview.png)
+
 Makes the [Claude desktop app](https://claude.ai/download) follow your [Omarchy](https://omarchy.org) theme. Every `omarchy theme set` recolours the whole app (sidebar, chat, Code tab, terminal pane, buttons, accents) within a second, with no restart.
 
 It reads the theme's `colors.toml` and rebuilds the app's own colour scales from it: the gray ramp behind every surface, text and border, and the accent, danger, success and warning roles. The app's contrast steps are kept, so it still reads like Claude, only in your colours.
