@@ -186,7 +186,11 @@ terminal = {
 
 print("/* Claude desktop palette - generated from the active Omarchy theme.")
 print(" * Do not edit: rewritten on every `omarchy theme set`. */")
-print(f"/* omaclaude-terminal: {json.dumps(terminal, separators=(',', ':'))} */\n")
+print(f"/* omaclaude-terminal: {json.dumps(terminal, separators=(',', ':'))} */")
+# The window-controls overlay (close button) is native, coloured by the main
+# process; inject.js reads this too.
+titlebar = {"color": bg, "symbolColor": fg}
+print(f"/* omaclaude-titlebar: {json.dumps(titlebar, separators=(',', ':'))} */\n")
 print(":root, .cds-root, .cds-dark-scope, [data-theme], [data-mode] {")
 print("\n".join(decl))
 print("}\n")
