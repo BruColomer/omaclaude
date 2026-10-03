@@ -159,14 +159,19 @@ def term(name, n, fallback):
     return c.get(name) or c.get(f"color{n}") or fallback
 
 
+# The terminal sits one step back from the chat, on the sidebar's shade
+# (gray-870, or its mirror gray-30 in a light UI), so it reads as its own
+# panel instead of blending in.
+term_bg = gray[870] if dark else gray[30]
+
 terminal = {
-    "background": bg,
+    "background": term_bg,
     "foreground": fg,
     "cursor": get("bright_foreground", fg),
-    "cursorAccent": bg,
+    "cursorAccent": term_bg,
     "selectionBackground": get("selection_background", selection),
     "selectionForeground": get("selection_foreground", get("bright_foreground", fg)),
-    "black": term("black", 0, bg),
+    "black": term("black", 0, term_bg),
     "red": term("red", 1, red),
     "green": term("green", 2, green),
     "yellow": term("yellow", 3, yellow),

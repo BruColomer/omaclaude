@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.brucolomer.omaclaude",
   "name": "omaclaude",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": "BruColomer",
   "license": "MIT",
   "description": "Makes the Claude desktop app follow your Omarchy theme. Recolours the whole app live on every theme change, with no restart.",
