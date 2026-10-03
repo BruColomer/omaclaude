@@ -11,6 +11,7 @@ Usage: gen-css.py path/to/colors.toml > omarchy-theme.css
 """
 
 import colorsys
+import json
 import sys
 import tomllib
 
@@ -151,8 +152,41 @@ legacy = {
 for k, v in legacy.items():
     add(k, triplet(v))
 
+# The terminal pane is drawn by xterm.js (WebGL), which CSS cannot reach, so
+# its palette travels as JSON in a comment that inject.js reads. Same mapping
+# as Omarchy's alacritty template; colorN keys are the fallback.
+def term(name, n, fallback):
+    return c.get(name) or c.get(f"color{n}") or fallback
+
+
+terminal = {
+    "background": bg,
+    "foreground": fg,
+    "cursor": get("bright_foreground", fg),
+    "cursorAccent": bg,
+    "selectionBackground": get("selection_background", selection),
+    "selectionForeground": get("selection_foreground", get("bright_foreground", fg)),
+    "black": term("black", 0, bg),
+    "red": term("red", 1, red),
+    "green": term("green", 2, green),
+    "yellow": term("yellow", 3, yellow),
+    "blue": term("blue", 4, accent),
+    "magenta": term("magenta", 5, magenta),
+    "cyan": term("cyan", 6, accent),
+    "white": term("white", 7, fg),
+    "brightBlack": c.get("muted") or c.get("color8") or get("dark_foreground", mix(bg, fg, 0.4)),
+    "brightRed": term("bright_red", 9, red),
+    "brightGreen": term("bright_green", 10, green),
+    "brightYellow": term("bright_yellow", 11, yellow),
+    "brightBlue": term("bright_blue", 12, accent),
+    "brightMagenta": term("bright_magenta", 13, magenta),
+    "brightCyan": term("bright_cyan", 14, accent),
+    "brightWhite": term("bright_white", 15, get("bright_foreground", fg)),
+}
+
 print("/* Claude desktop palette - generated from the active Omarchy theme.")
-print(" * Do not edit: rewritten on every `omarchy theme set`. */\n")
+print(" * Do not edit: rewritten on every `omarchy theme set`. */")
+print(f"/* omaclaude-terminal: {json.dumps(terminal, separators=(',', ':'))} */\n")
 print(":root, .cds-root, .cds-dark-scope, [data-theme], [data-mode] {")
 print("\n".join(decl))
 print("}\n")

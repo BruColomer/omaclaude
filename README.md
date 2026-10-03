@@ -1,6 +1,6 @@
 # omaclaude
 
-Makes the [Claude desktop app](https://claude.ai/download) follow your [Omarchy](https://omarchy.org) theme. Every `omarchy theme set` recolours the whole app (sidebar, chat, Code tab, buttons, accents) within a second, with no restart.
+Makes the [Claude desktop app](https://claude.ai/download) follow your [Omarchy](https://omarchy.org) theme. Every `omarchy theme set` recolours the whole app (sidebar, chat, Code tab, terminal pane, buttons, accents) within a second, with no restart.
 
 It reads the theme's `colors.toml` and rebuilds the app's own colour scales from it: the gray ramp behind every surface, text and border, and the accent, danger, success and warning roles. The app's contrast steps are kept, so it still reads like Claude, only in your colours.
 
@@ -31,7 +31,7 @@ Then quit Claude completely and open it again.
 - `/usr/local/bin/omaclaude-patch` adds a loader file to `/usr/lib/claude-desktop/resources/app.asar` and points the app's entry point at it. The loader loads `~/.local/share/omaclaude/inject.js` if it exists, then starts the app exactly as before. No app code is modified, and nothing is downloaded or executed.
 - `/etc/pacman.d/hooks/omaclaude.hook` re-runs the patcher after each `claude-desktop` upgrade, because an upgrade replaces `app.asar`.
 
-The injector runs inside the app and only inserts `~/.config/Claude/omaclaude.css` into the app's pages. It watches that file and swaps in the new version when it changes. It opens no ports and makes no network requests.
+The injector runs inside the app and only inserts `~/.config/Claude/omaclaude.css` into the app's pages. It watches that file and swaps in the new version when it changes. The terminal pane is drawn with WebGL, so CSS can't reach it; for that pane a small in-page script sets the terminal's colour palette (the same mapping as Omarchy's Alacritty theme) and nothing else. It opens no ports and makes no network requests.
 
 ## How it fits together
 
