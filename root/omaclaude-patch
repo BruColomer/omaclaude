@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+"""Add (or remove) the omaclaude loader in the Claude desktop app's app.asar.
+
+Appends a small loader file to the archive and points package.json "main" at
+it. The loader requires ~/.local/share/omaclaude/inject.js when it exists,
+then the app's original entry point, so the app runs unchanged when the
+plugin is not installed. Idempotent. Needs root, because app.asar belongs to
+the claude-desktop package; a pacman hook re-runs it after every upgrade,
+since an upgrade replaces app.asar.
+
+Only the archive header and package.json entry change. Nothing is executed,
+downloaded, or removed; --remove points "main" back at the original entry.
+
+Usage: omaclaude-patch [--remove] [path/to/app.asar]
+"""
+
+import hashlib
+import json
+import os
+import re
+import struct
+import sys
+
+args = [a for a in sys.argv[1:] if a != "--remove"]
+REMOVE = "--remove" in sys.argv[1:]
+ASAR = args[0] if args else "/usr/lib/claude-desktop/resources/app.asar"
+LOADER = "omaclaude-loader.js"
+OWN_LOADERS = (LOADER, "omarchy-loader.js")  # the latter: pre-release name
+BLOCK = 4 * 1024 * 1024
+
+
+def integrity(data):
+    blocks = [hashlib.sha256(data[i:i + BLOCK]).hexdigest() for i in range(0, max(len(data), 1), BLOCK)]
+    return {"algorithm": "SHA256", "hash": hashlib.sha256(data).hexdigest(), "blockSize": BLOCK, "blocks": blocks}
+
+
+def loader_source(original_main):
+    return (
+        "// Added by omaclaude (https://github.com/BruColomer/omaclaude).\n"
+        "// Loads the Omarchy theme injector if it is installed, then the app.\n"
+        "try {\n"
+        "  require(require('path').join(require('os').homedir(), '.local/share/omaclaude/inject.js'));\n"
+        "} catch (e) {\n"
+        "  if (e.code !== 'MODULE_NOT_FOUND') console.error('[omaclaude]', e);\n"
+        "}\n"
+        f"require({json.dumps('./' + os.path.normpath(original_main))});\n"
+    ).encode()
+
+
+def main():
+    with open(ASAR, "rb") as f:
+        raw = f.read()
+
+    # 8-byte pickle holding the header pickle's size, then the header pickle:
+    # payload size, string length, JSON. File offsets are relative to the end.
+    header_size = struct.unpack_from("<I", raw, 4)[0]
+    json_len = struct.unpack_from("<I", raw, 12)[0]
+    header = json.loads(raw[16:16 + json_len])
+    data = bytearray(raw[8 + header_size:])
+    files = header["files"]
+
+    def read(name):
+        entry = files[name]
+        off = int(entry["offset"])
+        return bytes(data[off:off + entry["size"]])
+
+    def append(name, content):
+        files[name] = {"size": len(content), "offset": str(len(data)), "integrity": integrity(content)}
+        data.extend(content)
+
+    pkg = json.loads(read("package.json"))
+    main_entry = pkg["main"]
+
+    # Recover the app's own entry point if a loader of ours is already in place.
+    original_main = main_entry
+    if main_entry in OWN_LOADERS and main_entry in files:
+        found = re.findall(r'require\("([^"]+)"\);\s*$', read(main_entry).decode())
+        if not found:
+            sys.exit(f"omaclaude: cannot find the original entry point in {main_entry}")
+        original_main = os.path.normpath(found[-1])
+
+    if REMOVE:
+        if original_main == main_entry:
+            print("omaclaude: app.asar is not patched")
+            return
+        pkg["main"] = original_main
+        append("package.json", json.dumps(pkg, indent=2).encode())
+        for name in OWN_LOADERS:
+            files.pop(name, None)
+        action = f"restored main: {original_main}"
+    else:
+        wanted = loader_source(original_main)
+        if main_entry == LOADER and read(LOADER) == wanted:
+            print("omaclaude: app.asar already patched")
+            return
+        files.pop("omarchy-loader.js", None)
+        append(LOADER, wanted)
+        if main_entry != LOADER:
+            pkg["main"] = LOADER
+            append("package.json", json.dumps(pkg, indent=2).encode())
+        action = f"main: {original_main} -> {LOADER}"
+
+    blob = json.dumps(header, separators=(",", ":")).encode()
+    padded = len(blob) + (-len(blob) % 4)
+    header_pickle = struct.pack("<II", 4 + padded, len(blob)) + blob + b"\0" * (padded - len(blob))
+    out = struct.pack("<II", 4, len(header_pickle)) + header_pickle + data
+
+    tmp = ASAR + ".omaclaude-tmp"
+    with open(tmp, "wb") as f:
+        f.write(out)
+    os.chmod(tmp, os.stat(ASAR).st_mode & 0o7777)
+    os.replace(tmp, ASAR)
+    print(f"omaclaude: patched {ASAR} ({action})")
+
+
+if __name__ == "__main__":
+    main()

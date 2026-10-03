@@ -1,0 +1,30 @@
+#!/bin/bash
+# omaclaude theme-set hook.
+#
+# Run by omarchy-hook as `bash <this file> <theme-slug>` after a theme switch.
+# Builds the Claude desktop stylesheet from the new theme's colors.toml and
+# writes it where the injector inside the app watches it, so the app retints
+# live.
+#
+# Runs inside the theme switch, so it stays quiet and never fails.
+
+colors="$HOME/.local/state/omarchy/current/theme/colors.toml"
+gen="$HOME/.local/share/omaclaude/gen-css.py"
+dest="$HOME/.config/Claude/omaclaude.css"
+
+[[ -r $colors && -r $gen ]] || exit 0
+mkdir -p "${dest%/*}" 2>/dev/null || exit 0
+
+tmp=$(mktemp "$dest.XXXXXX" 2>/dev/null) || exit 0
+if ! python3 "$gen" "$colors" >"$tmp" 2>/dev/null; then
+  rm -f "$tmp"
+  exit 0
+fi
+
+if cmp -s "$tmp" "$dest"; then
+  rm -f "$tmp"
+else
+  chmod 644 "$tmp"
+  mv -f "$tmp" "$dest" || rm -f "$tmp"
+fi
+exit 0

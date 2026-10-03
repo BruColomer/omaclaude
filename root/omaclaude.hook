@@ -1,0 +1,10 @@
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = claude-desktop
+
+[Action]
+Description = Adding the omaclaude theme loader to Claude desktop...
+When = PostTransaction
+Exec = /usr/local/bin/omaclaude-patch
