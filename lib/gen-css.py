@@ -5,13 +5,16 @@ The app's UI (the "cds" design system) derives every surface, text and border
 colour from a gray ramp (--cds-gray-0 lightest .. --cds-gray-900 darkest) and
 per-role scales (--cds-role-accent-50 .. 850, etc.). Re-colouring those ramps
 from the theme retints the whole app while keeping its contrast steps. The
-older claude.ai variables (--bg-100 etc., "H S% L%" triplets) are set too.
+older claude.ai variables (--bg-100 etc., "H S% L%" triplets) are set too, and
+so are the fixed colours of claude.ai's newer "fizzy-lake" look and desktop
+layout, which bypass the ramp (see stock-tokens.json).
 
 Usage: gen-css.py path/to/colors.toml > omarchy-theme.css
 """
 
 import colorsys
 import json
+import os
 import sys
 import tomllib
 
@@ -110,7 +113,13 @@ def on(color):
 
 
 decl = []
-add = lambda k, v: decl.append(f"  --{k}: {v} !important;")
+names = set()
+
+
+def add(k, v):
+    names.add(k)
+    decl.append(f"  --{k}: {v} !important;")
+
 
 for step, v in gray.items():
     add(f"cds-gray-{step}", v)
@@ -151,6 +160,77 @@ legacy = {
 }
 for k, v in legacy.items():
     add(k, triplet(v))
+
+# The same ramp as "H S% L%" triplets, which the newer desktop layout reads.
+for step, v in gray.items():
+    add(f"cds-hsl-gray-{step}", triplet(v))
+
+
+def ramp(color):
+    """A stock neutral, moved to the same place on the theme's ramp."""
+    target = lum(color)
+    steps = sorted(STOCK)
+    for lo, hi in zip(steps, steps[1:]):
+        a, b = lum(STOCK[lo]), lum(STOCK[hi])
+        if a >= target >= b:
+            return mix(gray[lo], gray[hi], (a - target) / (a - b) if a != b else 0)
+    return gray[0] if target > lum(STOCK[0]) else gray[900]
+
+
+# The desktop layout's own surface levels (on .dframe-root): fixed grays,
+# given here by their stock lightness.
+levels = [3.9, 10.2, 14.9, 20, 23.9, 32.2, 65.1] if dark else [100, 96.1, 92.2, 87.8, 83.9, 60, 45.1]
+for n, light in enumerate(levels):
+    add(f"df-z{n}", triplet(ramp(hexc([light / 100 * 255] * 3))))
+
+# claude.ai's newer look ("fizzy-lake", flagged on the html element) gives
+# surfaces, text, borders and fills fixed colours instead of ramp references.
+# stock-tokens.json (from tools/stock-tokens.py) holds those stock values, and
+# each is moved onto the theme: an opaque neutral by its place on the gray
+# ramp, a white or black overlay as the theme's light or dark end at the same
+# opacity, and a colour as the theme colour of its hue.
+light_end, dark_end = (fg, darker) if dark else (bg, fg)
+aqua = c.get("cyan") or c.get("color6") or accent
+hues = (  # (upper bound in degrees, theme colour)
+    (12, red), (30, mix(red, yellow, 0.5)), (65, yellow), (160, green),
+    (195, aqua), (240, accent), (345, magenta), (360, red),
+)
+
+
+def parse(value):
+    """'#rgb[a]', '#rrggbb[aa]' or 'H S% L%' -> ('#rrggbb', alpha, was a triplet)."""
+    if value.startswith("#"):
+        h = value[1:]
+        if len(h) in (3, 4):
+            h = "".join(ch * 2 for ch in h)
+        return "#" + h[:6], int(h[6:8], 16) / 255 if len(h) == 8 else 1.0, False
+    hh, s, l = (float(x.rstrip("%")) for x in value.split())
+    return hexc(v * 255 for v in colorsys.hls_to_rgb(hh / 360, l / 100, s / 100)), 1.0, True
+
+
+def retint(value):
+    color, alpha, was_triplet = parse(value)
+    r, g, b = rgb(color)
+    if max(r, g, b) - min(r, g, b) <= 6:
+        out = ramp(color) if alpha >= 1 else light_end if lum(color) > 0.5 else dark_end
+    else:
+        hue, light, _ = colorsys.rgb_to_hls(r / 255, g / 255, b / 255)
+        base = next(col for bound, col in hues if hue * 360 < bound)
+        toward = "#ffffff" if light > 0.5 else darker if dark else "#000000"
+        out = mix(base, toward, min(0.85, abs(light - 0.5) / 0.5 * 0.85))
+    if was_triplet:
+        return triplet(out)
+    return out if alpha >= 1 else out + "%02x" % round(alpha * 255)
+
+
+try:
+    with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "stock-tokens.json")) as f:
+        stock = json.load(f)
+except (OSError, ValueError):
+    stock = {"base": {}, "dark": {}}
+for name, value in {**stock["base"], **(stock["dark"] if dark else {})}.items():
+    if name[2:] not in names:
+        add(name[2:], retint(value))
 
 # The terminal pane is drawn by xterm.js (WebGL), which CSS cannot reach, so
 # its palette travels as JSON in a comment that inject.js reads. Same mapping
@@ -196,7 +276,7 @@ print(f"/* omaclaude-terminal: {json.dumps(terminal, separators=(',', ':'))} */"
 # process; inject.js reads this too.
 titlebar = {"color": bg, "symbolColor": fg}
 print(f"/* omaclaude-titlebar: {json.dumps(titlebar, separators=(',', ':'))} */\n")
-print(":root, .cds-root, .cds-dark-scope, [data-theme], [data-mode] {")
+print(":root, .cds-root, .cds-dark-scope, [data-theme], [data-mode], .dframe-root {")
 print("\n".join(decl))
 print("}\n")
 print(f"::selection {{ background-color: {selection}; }}")
