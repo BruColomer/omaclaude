@@ -35,6 +35,8 @@ Then quit Claude completely and open it again.
 
 The injector runs inside the app and only inserts `~/.config/Claude/omaclaude.css` into the app's pages. It watches that file and swaps in the new version when it changes. The terminal pane is drawn with WebGL, so CSS can't reach it; for that pane a small in-page script sets the terminal's colour palette (the same mapping as Omarchy's Alacritty theme) and nothing else. It opens no ports and makes no network requests.
 
+One more thing runs at app start, before the app reads its settings: it undoes the app's *automatic* hardware-acceleration shutoff (see [Hardware acceleration](#hardware-acceleration)). It touches nothing else in the app's settings.
+
 ## How it fits together
 
 | Piece | Location | Role |
@@ -42,9 +44,22 @@ The injector runs inside the app and only inserts `~/.config/Claude/omaclaude.cs
 | Theme hook | `~/.config/omarchy/hooks/theme-set.d/omaclaude` | Runs `gen-css.py` on every theme switch |
 | Generator | `~/.local/share/omaclaude/gen-css.py` | `colors.toml` → `~/.config/Claude/omaclaude.css` |
 | Injector | `~/.local/share/omaclaude/inject.js` | Inserts the stylesheet into the app, live |
+| GPU guard | `~/.local/share/omaclaude/gpu-autodisable.js` | Reverts the app's automatic hardware-acceleration shutoff at start |
 | Loader | inside `app.asar` (root step) | Loads the injector at app start |
 
 The shell plugin runs `install.sh` at every shell start, which keeps the user-level files current after a plugin update. It never runs anything as root.
+
+## Hardware acceleration
+
+The Claude app turns hardware acceleration off by itself after three GPU-process crashes in one session, and never turns it back on. Ending your Hyprland session (logout, reboot, shutdown) while Claude is still running kills its GPU process each time, so on Omarchy the app ends up with a DOM-rendered terminal pane and a laggy UI after a few days, until you find *Help → Troubleshooting → Disable Hardware Acceleration*.
+
+At app start, before the app reads its config, omaclaude reverts that automatic shutoff: when `isHardwareAccelerationAutoDisabled` is `true` in `~/.config/Claude/claude_desktop_config.json`, it sets the three `isHardwareAcceleration*` flags to `false` and removes the app's `gpu-crash-streak` marker. Details:
+
+- A shutoff you chose yourself (the Help menu toggle) is never touched.
+- It acts at most once per login session (boot + Hyprland instance, remembered in `~/.local/share/omaclaude/gpu-session`). If your GPU really is broken and the app switches acceleration off again mid-session, it stays off until your next login, so the cost is one retry per login, not a crash loop.
+- It does nothing while another Claude instance is running, and it logs each repair to `~/.local/share/omaclaude/gpu-autodisable.log`.
+
+Run `node --test test/gpu-autodisable.test.js` to check the logic.
 
 ## Light and dark
 

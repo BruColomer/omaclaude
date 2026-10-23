@@ -29,6 +29,7 @@ put() {
 
 put 644 "$here/lib/gen-css.py" "$data/gen-css.py"
 put 644 "$here/lib/inject.js" "$data/inject.js"
+put 644 "$here/lib/gpu-autodisable.js" "$data/gpu-autodisable.js"
 put 755 "$here/lib/theme-set-hook" "$hook"
 
 # Render the stylesheet for the current theme now, rather than waiting for
